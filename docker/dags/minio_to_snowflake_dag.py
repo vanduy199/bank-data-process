@@ -79,15 +79,19 @@ def load_to_snowflake(**kwargs):
             print(f"No files for {table}, skipping.")
             continue
 
+        # Deterministic full refresh: RAW.<table> == current MinIO contents
+        cur.execute(f"REMOVE @%{table}")
         for f in files:
-            cur.execute(f"PUT file://{f} @%{table}")
+            cur.execute(f"PUT file://{f} @%{table} OVERWRITE=TRUE")
             print(f"Uploaded {f} -> @{table} stage")
 
+        cur.execute(f"TRUNCATE TABLE {table}")
         copy_sql = f"""
         COPY INTO {table}
         FROM @%{table}
         FILE_FORMAT=(TYPE=PARQUET)
         ON_ERROR='CONTINUE'
+        FORCE=TRUE
         """
         cur.execute(copy_sql)
         print(f"Data loaded into {table}")

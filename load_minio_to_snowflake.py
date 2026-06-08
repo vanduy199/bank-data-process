@@ -56,17 +56,24 @@ def main():
                 print(f"[{table}] no files in MinIO, skipping.")
                 continue
 
+            # Deterministic full refresh: RAW.<table> == current MinIO contents.
+            # 1) clear the table stage, 2) PUT current files, 3) TRUNCATE,
+            # 4) COPY FORCE (TRUNCATE purges load history; FORCE ignores any leftover).
+            cur.execute(f"REMOVE @%{table}")
             for obj in objects:
                 key = obj["Key"]
                 local = os.path.join(tmp, os.path.basename(key))
                 s3.download_file(BUCKET, key, local)
                 cur.execute(f"PUT file://{local} @%{table} OVERWRITE=TRUE")
 
+            cur.execute(f"TRUNCATE TABLE {table}")
             cur.execute(
                 f"COPY INTO {table} FROM @%{table} "
-                f"FILE_FORMAT=(TYPE=PARQUET) ON_ERROR='CONTINUE'"
+                f"FILE_FORMAT=(TYPE=PARQUET) ON_ERROR='CONTINUE' FORCE=TRUE"
             )
-            print(f"[{table}] loaded {len(objects)} file(s) into BANKING.RAW.{table}")
+            cur.execute(f"SELECT count(*) FROM {table}")
+            n = cur.fetchone()[0]
+            print(f"[{table}] {len(objects)} file(s) -> {n} rows in BANKING.RAW.{table}")
 
     cur.close()
     conn.close()
