@@ -1,0 +1,40 @@
+version: 2
+
+models:
+  - name: stg_services
+    columns:
+      - name: service_id
+        tests: [not_null, unique]
+      - name: service_code
+        tests: [not_null, unique]
+
+  - name: stg_service_usage
+    columns:
+      - name: usage_id
+        tests: [not_null, unique]
+      - name: service_id
+        tests: [not_null]
+
+  - name: dim_services
+    columns:
+      - name: service_id
+        tests: [not_null]
+
+  - name: fct_service_usage
+    columns:
+      - name: usage_id
+        tests: [not_null, unique]
+      - name: service_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_services')
+                field: service_id
+
+  - name: agg_service_frequency
+    columns:
+      - name: service_id
+        tests: [not_null, unique]
+      - name: usage_rank
+        tests: [not_null]

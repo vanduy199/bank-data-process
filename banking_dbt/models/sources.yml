@@ -1,0 +1,10 @@
+version: 2
+
+sources:
+  - name: raw
+    database: BANKING
+    schema: RAW
+    description: "Raw CDC landing tables (single VARIANT column `v` per row)."
+    tables:
+      - name: services
+      - name: service_usage

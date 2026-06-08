@@ -1,1 +1,13 @@
 .env
+.venv/
+__pycache__/
+
+# dbt artefacts
+banking_dbt/target/
+banking_dbt/dbt_packages/
+banking_dbt/logs/
+
+# Local infra data
+docker/minio/data/
+docker/postgres/data/
+docker/logs/
