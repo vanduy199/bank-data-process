@@ -38,3 +38,59 @@ models:
         tests: [not_null, unique]
       - name: usage_rank
         tests: [not_null]
+
+  # ---- Transaction analytics flow ----
+  - name: stg_customers
+    columns:
+      - name: customer_id
+        tests: [not_null, unique]
+  - name: stg_accounts
+    columns:
+      - name: account_id
+        tests: [not_null, unique]
+  - name: stg_transactions
+    columns:
+      - name: transaction_id
+        tests: [not_null]
+
+  - name: dim_customers
+    columns:
+      - name: customer_id
+        tests: [not_null]
+  - name: dim_accounts
+    columns:
+      - name: account_id
+        tests: [not_null]
+  - name: fact_transactions
+    columns:
+      - name: transaction_id
+        tests: [not_null, unique]
+
+  # ---- Customer 360 / segmentation flow ----
+  - name: stg_customer_profiles
+    columns:
+      - name: customer_id
+        tests: [not_null, unique]
+  - name: stg_customer_segments
+    columns:
+      - name: customer_id
+        tests: [not_null, unique]
+      - name: segment_name
+        tests: [not_null]
+
+  - name: dim_customer_profile
+    columns:
+      - name: customer_id
+        tests: [not_null, unique]
+  - name: fact_customer_segment
+    columns:
+      - name: customer_id
+        tests: [not_null, unique]
+      - name: segment_name
+        tests: [not_null]
+  - name: fact_customer_activity
+    columns:
+      - name: customer_id
+        tests: [not_null]
+      - name: activity_date
+        tests: [not_null]

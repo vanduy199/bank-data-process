@@ -1,8 +1,12 @@
-# bank-data-process — Luồng "Tần suất sử dụng dịch vụ"
+# bank-data-process — Pipeline phân tích ngân hàng (3 luồng)
 
-Pipeline dữ liệu ngân hàng end-to-end theo mô hình **Modern Data Stack**, đo **tần suất sử dụng các
-dịch vụ ngân hàng**. Dữ liệu giả lập chảy realtime từ OLTP qua CDC vào data lake, nạp lên data
-warehouse và biến đổi thành các bảng phân tích.
+Pipeline dữ liệu ngân hàng end-to-end theo mô hình **Modern Data Stack**. Dữ liệu giả lập chảy realtime
+từ OLTP qua CDC vào data lake, nạp lên data warehouse (Snowflake) và biến đổi bằng dbt thành **3 luồng
+phân tích** dùng chung một hạ tầng:
+
+1. **Service Usage Frequency** — tần suất sử dụng các dịch vụ ngân hàng.
+2. **Transaction Analytics** — dim/fact giao dịch, dòng tiền theo khách/tài khoản.
+3. **Customer 360 / Segmentation** — hành vi, `risk_score`, phân khúc khách hàng (có tầng intermediate).
 
 ## 🏗️ Kiến trúc (8 chặng)
 
@@ -13,20 +17,28 @@ warehouse và biến đổi thành các bảng phân tích.
 
 | Chặng | Công cụ | Vai trò |
 |---|---|---|
-| 1 | `data-generator/fake_generator.py` (Faker) | Sinh customers, accounts, transactions, **services, service_usage** vào Postgres |
+| 1 | `data-generator/fake_generator.py` (Faker) | Sinh customers, accounts, transactions, **services, service_usage, customer_profiles, customer_segments** vào Postgres |
 | 2 | PostgreSQL 15 (`wal_level=logical`) | Hệ OLTP nguồn (system of record) |
 | 3 | Debezium (`kafka-debezium/`) | Bắt thay đổi từ WAL (CDC) |
 | 4 | Kafka | Message broker / buffer |
 | 5 | `consumer/kafka_to_minio.py` | Gom batch → ghi Parquet |
 | 6 | MinIO (S3) | Data lake (bucket `raw1`) |
 | 7 | `load_minio_to_snowflake.py` / Airflow DAG | Nạp Parquet → Snowflake RAW (cột VARIANT `v`) |
-| 8 | dbt (`banking_dbt/`) | staging → snapshot SCD2 (`services`) → marts tần suất |
+| 8 | dbt (`banking_dbt/`) | staging → snapshot SCD2 → **intermediate** → marts (3 luồng) |
 
 **Bảng kết quả** (`BANKING.ANALYTICS`):
+
+*Luồng 1 — Service Usage* (`marts/service_usage/`):
 - `agg_service_frequency` — xếp hạng tần suất theo dịch vụ (total_uses, distinct_customers, pct_share, usage_rank)
 - `agg_service_usage_daily` — tần suất theo ngày × kênh
 - `agg_customer_service_freq` — tần suất theo khách × dịch vụ
 - `fct_service_usage`, `dim_services`
+
+*Luồng 2 — Transaction Analytics* (`marts/dimensions/`, `marts/facts/`):
+- `dim_customers`, `dim_accounts` (SCD2), `fact_transactions`
+
+*Luồng 3 — Customer 360* (`marts/dimensions/`, `marts/facts/`, qua `models/intermediate/`):
+- `dim_customer_profile` (risk_score), `fact_customer_segment` (phân khúc), `fact_customer_activity` (roll-up ngày)
 
 ---
 
@@ -116,7 +128,7 @@ python load_minio_to_snowflake.py
 cd banking_dbt
 export $(grep -E '^SNOWFLAKE_' ../.env | xargs)
 export DBT_PROFILES_DIR="$PWD/.dbt"
-dbt run --select staging && dbt snapshot && dbt run --select marts && dbt test
+dbt run --select staging && dbt snapshot && dbt run --select intermediate marts && dbt test
 ```
 
 ---
@@ -125,10 +137,19 @@ dbt run --select staging && dbt snapshot && dbt run --select marts && dbt test
 
 - **MinIO Console:** http://localhost:9001 (user/pass `minioadmin`/`minioadmin`) → bucket `raw1`
 - **Kafka topics:** `docker compose exec kafka kafka-topics --bootstrap-server localhost:9092 --list`
-- **Bảng tần suất (Snowflake):**
+- **Kết quả 3 luồng (Snowflake `BANKING.ANALYTICS`):**
   ```sql
+  -- Luồng 1: tần suất dịch vụ
   SELECT service_name, total_uses, distinct_customers, pct_share, usage_rank
-  FROM BANKING.ANALYTICS.agg_service_frequency ORDER BY usage_rank;
+  FROM agg_service_frequency ORDER BY usage_rank;
+
+  -- Luồng 2: hoạt động giao dịch theo khách × ngày
+  SELECT customer_id, activity_date, transactions_count, total_amount
+  FROM fact_customer_activity ORDER BY activity_date DESC LIMIT 20;
+
+  -- Luồng 3: phân khúc + rủi ro khách hàng
+  SELECT segment_name, count(*) FROM fact_customer_segment GROUP BY 1 ORDER BY 2 DESC;
+  SELECT customer_id, risk_score FROM dim_customer_profile ORDER BY risk_score DESC LIMIT 10;
   ```
 
 ---

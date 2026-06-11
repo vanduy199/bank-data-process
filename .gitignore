@@ -11,3 +11,6 @@ banking_dbt/logs/
 docker/minio/data/
 docker/postgres/data/
 docker/logs/
+
+banking-modern-datasatck_update/
+banking-modern-datasatck/

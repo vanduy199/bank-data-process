@@ -47,3 +47,32 @@ CREATE TABLE IF NOT EXISTS service_usage(
 
 CREATE INDEX IF NOT EXISTS idx_service_usage_service_used ON service_usage(service_id, used_at);
 CREATE INDEX IF NOT EXISTS idx_service_usage_customer_used ON service_usage(customer_id, used_at);
+
+-- ============================================================================
+-- Customer 360 / Segmentation flow (sources for customer-behavior analytics)
+-- ============================================================================
+
+-- Aggregated analytical profile per customer (Customer 360 view)
+CREATE TABLE IF NOT EXISTS customer_profiles (
+  customer_id INT PRIMARY KEY REFERENCES customers(id) ON DELETE CASCADE,
+  total_transactions INT DEFAULT 0,
+  total_transfer_amount NUMERIC(18,2) DEFAULT 0,
+  avg_transaction_amount NUMERIC(18,2) DEFAULT 0,
+  preferred_transaction_type VARCHAR(50),
+  login_frequency INT DEFAULT 0,
+  favorite_feature VARCHAR(100),
+  last_active_date TIMESTAMP WITH TIME ZONE,
+  risk_score NUMERIC(5,2) DEFAULT 0 CHECK (risk_score >= 0 AND risk_score <= 100),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+-- Rule-based segment assignment per customer
+CREATE TABLE IF NOT EXISTS customer_segments (
+  customer_id INT PRIMARY KEY REFERENCES customers(id) ON DELETE CASCADE,
+  segment_name VARCHAR(50) NOT NULL, -- VIP | Active User | Saver | Dormant User | Risky User | ...
+  segment_score NUMERIC(5,2) DEFAULT 0,
+  assigned_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_customer_profiles_risk ON customer_profiles(risk_score);
+CREATE INDEX IF NOT EXISTS idx_customer_segments_name ON customer_segments(segment_name);

@@ -24,11 +24,14 @@ CREATE SCHEMA IF NOT EXISTS BANKING.ANALYTICS;  -- Silver/Gold: dbt staging, sna
 -- dbt staging models read these as v:col::type.
 USE SCHEMA BANKING.RAW;
 
-CREATE TABLE IF NOT EXISTS RAW.customers     (v VARIANT);
-CREATE TABLE IF NOT EXISTS RAW.accounts      (v VARIANT);
-CREATE TABLE IF NOT EXISTS RAW.transactions  (v VARIANT);
-CREATE TABLE IF NOT EXISTS RAW.services      (v VARIANT);
-CREATE TABLE IF NOT EXISTS RAW.service_usage (v VARIANT);
+CREATE TABLE IF NOT EXISTS RAW.customers         (v VARIANT);
+CREATE TABLE IF NOT EXISTS RAW.accounts          (v VARIANT);
+CREATE TABLE IF NOT EXISTS RAW.transactions      (v VARIANT);
+CREATE TABLE IF NOT EXISTS RAW.services          (v VARIANT);
+CREATE TABLE IF NOT EXISTS RAW.service_usage     (v VARIANT);
+-- Customer 360 flow
+CREATE TABLE IF NOT EXISTS RAW.customer_profiles (v VARIANT);
+CREATE TABLE IF NOT EXISTS RAW.customer_segments (v VARIANT);
 
 -- Quick check
 SHOW TABLES IN SCHEMA BANKING.RAW;

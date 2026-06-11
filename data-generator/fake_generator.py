@@ -153,9 +153,56 @@ def run_iteration():
                 (customer_id, account_id, service_id, channel, status, used_at),
             )
 
+    # 5. Generate customer_profiles + 6. rule-based customer_segments (Customer 360 flow)
+    for customer_id in customers:
+        total_txns = random.randint(0, 500)
+        total_transfer = random_money(Decimal("0.00"), Decimal("60000.00"))
+        avg_txn = random_money(Decimal("10.00"), Decimal("1500.00"))
+        pref_type = random.choice(txn_types)
+        login_freq = random.randint(0, 60)
+        fav_feature = random.choice(
+            ["dashboard", "transfer_page", "bill_payment", "account_settings"]
+        )
+        last_active = datetime.now(timezone.utc) - timedelta(
+            days=random.randint(0, 60),
+            hours=random.randint(0, 23),
+            minutes=random.randint(0, 59),
+        )
+        risk = random_money(Decimal("0.00"), Decimal("100.00"))
+
+        cur.execute(
+            "INSERT INTO customer_profiles "
+            "(customer_id, total_transactions, total_transfer_amount, avg_transaction_amount, "
+            " preferred_transaction_type, login_frequency, favorite_feature, last_active_date, risk_score) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (customer_id, total_txns, total_transfer, avg_txn, pref_type,
+             login_freq, fav_feature, last_active, risk),
+        )
+
+        # Rule-based segmentation (priority order)
+        days_inactive = (datetime.now(timezone.utc) - last_active).days
+        segment_name, segment_score = "Standard User", Decimal("50.00")
+        if risk > Decimal("80.00"):
+            segment_name, segment_score = "Risky User", risk
+        elif days_inactive > 30:
+            segment_name, segment_score = "Dormant User", Decimal("90.00")
+        elif total_txns > 200 and total_transfer > Decimal("30000.00"):
+            segment_name, segment_score = "VIP", Decimal("95.00")
+        elif login_freq > 20:
+            segment_name, segment_score = "Active User", Decimal("85.00")
+        elif pref_type == "TRANSFER" and total_transfer > Decimal("10000.00"):
+            segment_name, segment_score = "Transfer Heavy User", Decimal("75.00")
+
+        cur.execute(
+            "INSERT INTO customer_segments (customer_id, segment_name, segment_score) "
+            "VALUES (%s, %s, %s)",
+            (customer_id, segment_name, segment_score),
+        )
+
     print(
-        f"✅ Generated {len(customers)} customers, {len(accounts)} accounts, "
-        f"{NUM_TRANSACTIONS} transactions, {NUM_SERVICE_USAGE} service-usage events."
+        f"✅ Generated {len(customers)} customers (with profiles & segments), "
+        f"{len(accounts)} accounts, {NUM_TRANSACTIONS} transactions, "
+        f"{NUM_SERVICE_USAGE} service-usage events."
     )
 
 # -----------------------------

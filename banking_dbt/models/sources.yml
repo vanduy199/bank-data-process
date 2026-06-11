@@ -6,5 +6,12 @@ sources:
     schema: RAW
     description: "Raw CDC landing tables (single VARIANT column `v` per row)."
     tables:
+      - name: customers
+      - name: accounts
+      - name: transactions
       - name: services
       - name: service_usage
+      - name: customer_profiles
+        description: "Raw customer 360 profile landing table"
+      - name: customer_segments
+        description: "Raw customer segmentation landing table"

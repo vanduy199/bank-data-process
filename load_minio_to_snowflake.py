@@ -24,7 +24,8 @@ BUCKET = os.getenv("MINIO_BUCKET", "raw1")
 TABLES = [
     t.strip()
     for t in os.getenv(
-        "CDC_TABLES", "customers,accounts,transactions,services,service_usage"
+        "CDC_TABLES",
+        "customers,accounts,transactions,services,service_usage,customer_profiles,customer_segments",
     ).split(",")
     if t.strip()
 ]

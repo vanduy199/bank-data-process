@@ -18,5 +18,7 @@ models:
   banking_dbt:
     staging:
       +materialized: view
+    intermediate:
+      +materialized: table
     marts:
       +materialized: table

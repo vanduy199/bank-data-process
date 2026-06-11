@@ -18,31 +18,31 @@ def dbt(cmd: str) -> str:
 
 
 with DAG(
-    dag_id="service_usage_dbt",
+    dag_id="banking_dbt",
     default_args=default_args,
-    description="Run dbt staging + SCD2 snapshot + frequency marts for service usage",
+    description="dbt for 3 flows: service usage + transactions + customer 360 (staging -> snapshot -> intermediate/marts)",
     schedule_interval="@hourly",
     start_date=datetime(2025, 1, 1),
     catchup=False,
-    tags=["dbt", "service_usage"],
+    tags=["dbt", "service_usage", "transactions", "customer_360"],
 ) as dag:
 
-    # 1. Build staging views (snapshots/marts depend on them)
+    # 1. Build staging views (snapshots/intermediate/marts depend on them)
     dbt_staging = BashOperator(
         task_id="dbt_staging",
         bash_command=dbt("run --select staging"),
     )
 
-    # 2. SCD2 snapshot of the service catalog
+    # 2. SCD2 snapshots (services, customers, accounts, customer profiles/segments)
     dbt_snapshot = BashOperator(
         task_id="dbt_snapshot",
         bash_command=dbt("snapshot"),
     )
 
-    # 3. Frequency marts (dim/fct/agg)
+    # 3. Intermediate (customer 360 features) + all marts
     dbt_run_marts = BashOperator(
         task_id="dbt_run_marts",
-        bash_command=dbt("run --select marts"),
+        bash_command=dbt("run --select intermediate marts"),
     )
 
     # 4. Data tests

@@ -88,13 +88,13 @@ warehouse() {
   c "Nạp MinIO -> Snowflake RAW"
   "$PY" load_minio_to_snowflake.py
 
-  c "Chạy dbt: staging -> snapshot -> marts -> test"
+  c "Chạy dbt: staging -> snapshot -> intermediate + marts -> test"
   ( cd banking_dbt
     set -a; . ../.env; set +a
     export DBT_PROFILES_DIR="$PWD/.dbt"
     "$DBT" run --select staging
     "$DBT" snapshot
-    "$DBT" run --select marts
+    "$DBT" run --select intermediate marts
     "$DBT" test
   )
   ok "dbt xong"
@@ -114,6 +114,28 @@ print(f"{'#':<3}{'SERVICE':<22}{'CATEGORY':<12}{'USES':>6}{'CUST':>6}{'%':>8}")
 print("-"*60)
 for r in cur.fetchall():
     print(f"{r[0]:<3}{r[1]:<22}{r[2]:<12}{r[3]:>6}{r[4]:>6}{float(r[5]):>7.1f}%")
+cur.close(); c.close()
+PYEOF
+
+  c "🎯 Phân khúc khách hàng (customer 360) + top rủi ro"
+  "$PY" - <<'PYEOF'
+import os, snowflake.connector
+c = snowflake.connector.connect(
+    user=os.environ["SNOWFLAKE_USER"], password=os.environ["SNOWFLAKE_PASSWORD"],
+    account=os.environ["SNOWFLAKE_ACCOUNT"], warehouse=os.getenv("SNOWFLAKE_WAREHOUSE","COMPUTE_WH"),
+    database="BANKING", schema="ANALYTICS", role=os.getenv("SNOWFLAKE_ROLE","ACCOUNTADMIN"))
+cur=c.cursor()
+cur.execute("""SELECT segment_name, count(*) FROM BANKING.ANALYTICS.fact_customer_segment
+               GROUP BY segment_name ORDER BY count(*) DESC""")
+print(f"{'SEGMENT':<22}{'#CUSTOMERS':>10}")
+print("-"*32)
+for r in cur.fetchall():
+    print(f"{r[0]:<22}{r[1]:>10}")
+cur.execute("""SELECT customer_id, risk_score FROM BANKING.ANALYTICS.dim_customer_profile
+               ORDER BY risk_score DESC LIMIT 5""")
+print("\nTop 5 risk_score:")
+for r in cur.fetchall():
+    print(f"  customer {r[0]}: {float(r[1]):.1f}")
 cur.close(); c.close()
 PYEOF
 }
