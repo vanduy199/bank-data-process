@@ -101,6 +101,30 @@ GEN_RUNS=3 DRAIN_SECONDS=30 ./run_pipeline.sh ingest   # sinh 3 lần, consumer 
 
 ---
 
+## 🌬️ Airflow (orchestration — thay cho chặng 7–8 thủ công)
+
+Lần đầu chạy `airflow-init` (migrate metadata DB + tạo user admin), sau đó bật webserver + scheduler:
+
+```bash
+docker compose up airflow-init            # 1 lần: db migrate + tạo user admin
+docker compose up -d airflow-webserver airflow-scheduler
+```
+
+- **UI:** http://localhost:8080 — đăng nhập `admin` / `admin` (đổi trong `.env`: `AIRFLOW_ADMIN_*`).
+- **2 DAG** (đã unpause sẵn):
+  - `minio_to_snowflake_banking` — nạp Parquet MinIO → Snowflake RAW (mỗi 1 phút).
+  - `banking_dbt` — dbt staging → snapshot → intermediate → marts → test cho cả 3 luồng (@hourly).
+- Test nhanh 1 DAG không cần UI:
+  ```bash
+  docker compose exec -T airflow-scheduler airflow dags test minio_to_snowflake_banking
+  docker compose exec -T airflow-scheduler airflow dags test banking_dbt
+  ```
+
+> dbt trong container ghi `logs/`+`target/` ra `/tmp` (vì thư mục `banking_dbt/` mount từ host thuộc user
+> khác uid airflow=50000) — đã xử lý sẵn trong `docker/dags/service_dbt_dag.py`.
+
+---
+
 ## 🔧 Chạy thủ công (để hiểu / debug)
 
 ```bash

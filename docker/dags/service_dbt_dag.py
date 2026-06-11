@@ -14,7 +14,14 @@ PROFILES_DIR = "/home/airflow/.dbt"
 
 
 def dbt(cmd: str) -> str:
-    return f"cd {DBT_DIR} && dbt {cmd} --profiles-dir {PROFILES_DIR}"
+    # The dbt project dir is bind-mounted from the host (owned by the host user),
+    # so the airflow user (uid 50000) cannot write logs/target there. Redirect both
+    # to container-writable paths under /tmp.
+    return (
+        f"cd {DBT_DIR} && "
+        f"DBT_LOG_PATH=/tmp/dbt_logs DBT_TARGET_PATH=/tmp/dbt_target "
+        f"dbt {cmd} --profiles-dir {PROFILES_DIR}"
+    )
 
 
 with DAG(

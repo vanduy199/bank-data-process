@@ -32,7 +32,7 @@ TOPICS = [f"{TOPIC_PREFIX}.{SCHEMA}.{t}" for t in TABLES]
 consumer = KafkaConsumer(
     *TOPICS,
     bootstrap_servers=os.getenv("KAFKA_BOOTSTRAP"),
-    auto_offset_reset='earliest',
+    auto_offset_reset='latest',
     enable_auto_commit=True,
     group_id=os.getenv("KAFKA_GROUP"),
     value_deserializer=lambda x: json.loads(x.decode('utf-8'))

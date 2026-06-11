@@ -82,9 +82,13 @@ services:
     container_name: airflow-webserver
     restart: always
     depends_on:
-      - airflow-scheduler
-      - airflow-postgres
+      airflow-init:
+        condition: service_completed_successfully
+      airflow-postgres:
+        condition: service_healthy
     environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW_SECRET_KEY:-banking-mds-secret}
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@airflow-postgres:5432/${AIRFLOW_DB_NAME}
       - POSTGRES_HOST=${POSTGRES_HOST}
@@ -97,7 +101,7 @@ services:
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
       - MINIO_BUCKET=${MINIO_BUCKET:-raw1}
-      - CDC_TABLES=${CDC_TABLES:-customers,accounts,transactions,services,service_usage}
+      - CDC_TABLES=${CDC_TABLES:-customers,accounts,transactions,services,service_usage,customer_profiles,customer_segments}
       - SNOWFLAKE_USER=${SNOWFLAKE_USER}
       - SNOWFLAKE_PASSWORD=${SNOWFLAKE_PASSWORD}
       - SNOWFLAKE_ACCOUNT=${SNOWFLAKE_ACCOUNT}
@@ -122,8 +126,13 @@ services:
     container_name: airflow-scheduler
     restart: always
     depends_on:
-      - airflow-postgres
+      airflow-init:
+        condition: service_completed_successfully
+      airflow-postgres:
+        condition: service_healthy
     environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__WEBSERVER__SECRET_KEY=${AIRFLOW_SECRET_KEY:-banking-mds-secret}
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@airflow-postgres:5432/${AIRFLOW_DB_NAME}
       - POSTGRES_HOST=${POSTGRES_HOST}
@@ -136,7 +145,7 @@ services:
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
       - MINIO_BUCKET=${MINIO_BUCKET:-raw1}
-      - CDC_TABLES=${CDC_TABLES:-customers,accounts,transactions,services,service_usage}
+      - CDC_TABLES=${CDC_TABLES:-customers,accounts,transactions,services,service_usage,customer_profiles,customer_segments}
       - SNOWFLAKE_USER=${SNOWFLAKE_USER}
       - SNOWFLAKE_PASSWORD=${SNOWFLAKE_PASSWORD}
       - SNOWFLAKE_ACCOUNT=${SNOWFLAKE_ACCOUNT}
@@ -166,6 +175,37 @@ services:
       - airflow_postgres_data:/var/lib/postgresql/data
     ports:
       - "5433:5432"  # separate from banking-postgres to avoid conflict
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${AIRFLOW_DB_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-shot init: migrate Airflow metadata DB + create the admin login user.
+  # Webserver/scheduler wait for this to complete successfully.
+  airflow-init:
+    build:
+      context: .
+      dockerfile: docker-airflow.dockerfile
+    container_name: airflow-init
+    depends_on:
+      airflow-postgres:
+        condition: service_healthy
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@airflow-postgres:5432/${AIRFLOW_DB_NAME}
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db migrate
+        airflow users create \
+          --username "${AIRFLOW_ADMIN_USER:-admin}" \
+          --password "${AIRFLOW_ADMIN_PASSWORD:-admin}" \
+          --firstname Admin --lastname User --role Admin \
+          --email admin@example.com || true
+    restart: "no"
 
 volumes:
   airflow_postgres_data:
